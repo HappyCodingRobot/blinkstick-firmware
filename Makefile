@@ -7,7 +7,7 @@
 # License: GNU GPL v2 (see License.txt), GNU GPL v3 or proprietary (CommercialLicense.txt)
 # This Revision: $Id: Makefile 692 2008-11-07 15:07:40Z cs $
 
-SHELL=C:/Windows/System32/cmd.exe
+#SHELL=C:/Windows/System32/cmd.exe
 
 #DEVICE  = attiny45
 DEVICE  = attiny85
@@ -34,6 +34,8 @@ help:
 	@echo "make defaults .. write default eeprom"
 	@echo "make clean ..... to delete objects and hex file"
 	@echo "make deploy .... program, increment serial, defaults"
+	@echo "(make eep ...... programm to write the eeprom, used for board with micronucleus bootloader)"
+	@echo "(make digistump  build and write to digistump board)"
 
 hex: main.hex
 
@@ -62,6 +64,7 @@ defaults:
 clean:
 	rm -f main.hex main.lst main.obj main.cof main.list main.map main.eep.hex main.elf 
 	rm -f main.o usbdrv/oddebug.o usbdrv/usbdrv.o usbdrv/usbdrvasm.o main.s usbdrv/oddebug.s usbdrv/usbdrv.s light_ws2812.o
+
 
 .cpp.o:
 	$(COMPILEPP) -c $< -o $@
@@ -109,3 +112,13 @@ increment:
 	ruby increment.rb
 
 deploy: program increment defaults
+
+eep: u_nucleus_serial.o
+	$(COMPILE) -o u_nucleus_serial.elf u_nucleus_serial.o
+	rm -f u_nucleus_serial.hex u_nucleus_serial.eep.hex
+	avr-objcopy -j .text -j .data -O ihex u_nucleus_serial.elf u_nucleus_serial.hex
+	avr-size u_nucleus_serial.hex
+	rm -f u_nucleus_serial.elf u_nucleus_serial.o
+
+digistump: main.hex
+	micronucleus --type intel-hex main.hex
