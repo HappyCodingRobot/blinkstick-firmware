@@ -7,23 +7,25 @@
  * License: GNU GPL v2 (see License.txt), GNU GPL v3 or proprietary (CommercialLicense.txt)
  */
 
+#define DIGISTUMP
+
 #define LED_PORT_DDR        DDRB
 
 #define R_BIT               PB4
 #define G_BIT               PB1
 #define B_BIT               PB0
 
-#define R_PWM				OCR1B
-#define G_PWM				OCR0B
-#define B_PWM				OCR0A
+#define R_PWM               OCR1B
+#define G_PWM               OCR0B
+#define B_PWM               OCR0A
 
-#define MODE_RGB			0
-#define MODE_RGB_INVERSE   	1
-#define MODE_WS2812		   	2
+#define MODE_RGB            0
+#define MODE_RGB_INVERSE    1
+#define MODE_WS2812         2
 
-#define TASK_NONE			0
-#define TASK_SEND_DATA 		1
-#define TASK_SET_MODE  		2
+#define TASK_NONE           0
+#define TASK_SEND_DATA      1
+#define TASK_SET_MODE       2
 
 #include <avr/io.h>
 #include <avr/wdt.h>
@@ -34,17 +36,17 @@
 #include <avr/pgmspace.h>   /* required by usbdrv.h */
 extern "C"
 {
-	#include "usbdrv.h"
-	#include "light_ws2812.h"
+    #include "usbdrv.h"
+    #include "light_ws2812.h"
 }
 
 /* ------------------------------------------------------------------------- */
 /* ----------------------------- LED interface ----------------------------- */
 /* ------------------------------------------------------------------------- */
 
-#define MAX_LEDS		64
-#define MIN_LED_FRAME	8 * 3
-#define DELAY_CYCLES	64
+#define MAX_LEDS        32
+#define MIN_LED_FRAME   8 * 3
+#define DELAY_CYCLES    64
 
 static uint8_t led[MAX_LEDS * 3];
 
@@ -273,6 +275,9 @@ uchar usbFunctionWrite(uchar *data, uchar len)
 	{
 		if (mode == MODE_RGB)
 		{
+#ifdef DIGISTUMP
+			return 1;
+#endif
 			led[0] = data[2];
 			led[1] = data[1];
 			led[2] = data[3];
@@ -282,6 +287,9 @@ uchar usbFunctionWrite(uchar *data, uchar len)
 		}
 		else if (mode == MODE_RGB_INVERSE)
 		{
+#ifdef DIGISTUMP
+			return 1;
+#endif
 			led[0] = data[2];
 			led[1] = data[1];
 			led[2] = data[3];
@@ -314,13 +322,13 @@ uchar usbFunctionWrite(uchar *data, uchar len)
 		//Ignore the first byte of data as it's report id
 		if (currentAddress == 0)
 		{
-			eeprom_write_block(&data[1], (uchar *)0 + currentAddress + addressOffset, len);
+			eeprom_update_block(&data[1], (uchar *)0 + currentAddress + addressOffset, len);
 			currentAddress += len - 1;
 			bytesRemaining -= (len - 1);
 		}
 		else
 		{
-			eeprom_write_block(data, (uchar *)0 + currentAddress + addressOffset, len);
+			eeprom_update_block(data, (uchar *)0 + currentAddress + addressOffset, len);
 			currentAddress += len;
 			bytesRemaining -= len;
 		}
@@ -329,8 +337,12 @@ uchar usbFunctionWrite(uchar *data, uchar len)
 	}
 	else if (reportId == 4)
 	{
+#ifdef DIGISTUMP
+		mode = MODE_WS2812;
+#else
 		mode = data[1];
-		eeprom_write_byte((uchar *)0 + 1 + 12, mode);
+#endif
+		eeprom_update_byte((uchar *)0 + 1 + 12, mode);
 		//Prepare to send the data simultaneously together with USB polling
 		task = TASK_SET_MODE;
 		delayCycles = 0;
@@ -470,9 +482,11 @@ static void SetSerial(void)
 static void SetMode(void)
 {
    mode = eeprom_read_byte((uchar *)0 + 1 + 12);
-
+#ifdef DIGISTUMP
+   mode=2;
+#endif
    if (mode > 2)
-	   mode = 0;
+       mode = 0;
 }
 
 
@@ -638,13 +652,14 @@ extern "C" void usbEventResetReady(void)
     cli();  // usbMeasureFrameLength() counts CPU cycles, so disable interrupts.
     calibrateOscillator();
     sei();
-    eeprom_write_byte(0, OSCCAL);   // store the calibrated value in EEPROM
+    eeprom_update_byte(0, OSCCAL);   // store the calibrated value in EEPROM
 }
 
 void ApplyMode(void)
 {
 	if (mode == MODE_RGB || mode == MODE_RGB_INVERSE)
 	{
+#ifndef DIGISTUMP
 		/* PWM enable,  */
 		GTCCR |= _BV(PWM1B) | _BV(COM1B1);
 		TCCR0A |= _BV(WGM00) | _BV(WGM01) | _BV(COM0A1) | _BV(COM0B1);
@@ -666,9 +681,11 @@ void ApplyMode(void)
 			_delay_ms(10);
 			setRGBPWM(0, 0, 0);
 		}
+#endif
 	}
 	else if (mode == MODE_WS2812)
 	{
+#ifndef DIGISTUMP
 		//Turn off PWM
 		setRGBPWM(0, 0, 0);
 
@@ -679,7 +696,7 @@ void ApplyMode(void)
 		/* Disable PWM */
 		GTCCR &= ~_BV(PWM1B) & ~_BV(COM1B1);
 		TCCR0A &= ~_BV(WGM00) & ~_BV(WGM01) & ~_BV(COM0A1) & ~_BV(COM0B1);
-
+#endif
 		led[0]=32; led[1]=32; led[2]=32;
 		ws2812_sendarray_mask(&led[0], 3, channelToPin(0));
 		ws2812_sendarray_mask(&led[0], 3, channelToPin(1));
@@ -743,12 +760,12 @@ void ledTransfer() {
 
 int main(void)
 {
-	uchar   i;
+    uchar   i;
 
-	wdt_enable(WDTO_1S);
+    wdt_enable(WDTO_1S);
 
-	SetSerial();
-	SetMode();
+    SetSerial();
+    SetMode();
 
     /* Even if you don't use the watchdog, turn it off here. On newer devices,
      * the status of the watchdog (on/off, period) is PRESERVED OVER RESET!
@@ -762,25 +779,26 @@ int main(void)
     usbDeviceDisconnect();  /* enforce re-enumeration, do this while interrupts are disabled! */
     i = 0;
     while(--i){             /* fake USB disconnect for > 250 ms */
-		wdt_reset();
+        wdt_reset();
         _delay_ms(1);
     }
     usbDeviceConnect();
-	
-	//Set LED ports to output
-    LED_PORT_DDR |= _BV(R_BIT);   
-    LED_PORT_DDR |= _BV(G_BIT);   
-    LED_PORT_DDR |= _BV(B_BIT);   
+    
+    //Set LED ports to output
+#ifndef DIGISTUMP
+    LED_PORT_DDR |= _BV(R_BIT);
+#endif
+    LED_PORT_DDR |= _BV(G_BIT);
+    LED_PORT_DDR |= _BV(B_BIT);
 
-	ApplyMode();
+    ApplyMode();
 
     sei();
 
     for(;;){                /* main event loop */
-		wdt_reset();
-	  	usbPoll();
-
-		ledTransfer();	
+        wdt_reset();
+        usbPoll();
+        ledTransfer();	
     }
     return 0;
 }
