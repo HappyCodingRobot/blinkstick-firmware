@@ -34,7 +34,7 @@ Memory Map:
 */
 // serial number string in eeprom: "BS<6-digit number>-1.4"+mode byte (2:ws2812)
 #define SERIAL_NUMBER_LENGTH 12 // BSXXXXXX-1.0
-const char serial_string[SERIAL_NUMBER_LENGTH+2] = "BS003001-2.2\02";
+const char serial_string[SERIAL_NUMBER_LENGTH+2] = "BS003003-2.2\02";
 
 
 

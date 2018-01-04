@@ -22,6 +22,7 @@
 #define MODE_RGB            0
 #define MODE_RGB_INVERSE    1
 #define MODE_WS2812         2
+//#define MODE_WS2812_INVERSE         3
 
 #define TASK_NONE           0
 #define TASK_SEND_DATA      1
